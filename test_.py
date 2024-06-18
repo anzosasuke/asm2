@@ -11,6 +11,10 @@ from asm2vec.asm import parse_instruction
 import os
 import argparse
 import matplotlib.pyplot as plt
+from multiprocessing import Pool
+
+
+
 def write_function_pkl(asm2vec_functions):
     for asm2vec_function in asm2vec_functions:
         name_ = asm2vec_function.name()
@@ -39,11 +43,11 @@ def compare_2_functions(pkl1, pkl2, model):
             return cosine_similarity(vec1, vec2)
 
 def write_vector(model):
-
-    for file in os.listdir('functions/c/'):
-        file1 = os.path.join('functions/c/', file)
+    # change the address of the pcikle
+    for file in os.listdir('function_pickle/Rust/'):
+        file1 = os.path.join('function_pickle/Rust/', file)
         file1 = deserialize_from_pickle(file1)
-        folder = os.path.join('vectors/C/', str(file))
+        folder = os.path.join('vectors/Rust/', str(file))
         vector = model.to_vec(file1)
         with open(folder, 'wb') as f:
            pickle.dump(vector, f)
@@ -62,7 +66,7 @@ def fetch_functions():
 
 
 
-loaded_model = deserialize_from_pickle('asm2vec_model1.pkl')
+# loaded_model = deserialize_from_pickle('asm2vec_model1.pkl')
 
 
 
@@ -73,15 +77,25 @@ loaded_model = deserialize_from_pickle('asm2vec_model1.pkl')
 #################### Use when you want to get the individual functions from big pickle ########
 # asm2vec_funcs = deserialize_from_pickle('function_pickle/C/sgcc')
 # write_function_pkl(asm2vec_funcs)
-vect_ = []
-def write_numpy_vector(loaded_model):
-    for func in asm2vec_funcs:
-        vect_.append(loaded_model.to_vec(func))
-    # print(np.array(vect_).shape)
-    folder = os.path.join('vectors/c_big', "c_vec" )
-    vect_ = np.array(vect_)
-    np.save(folder, vect_)
 
+def write_numpy_vector(loaded_model):
+    vect_ = []
+    
+    for file in os.listdir('function_pickle/Rust'):
+        
+        file = os.path.join('function_pickle/Rust', file)
+        print(file)
+        file = deserialize_from_pickle(file)
+        print("here")
+        for func in file:
+            vect_.append(loaded_model.to_vec(func))
+        # print(np.array(vect_).shape)
+        folder = os.path.join('vectors/Rust', file)
+        vect_ = np.array(vect_)
+        np.save(folder, vect_)
+    
+        
+# write_numpy_vector(loaded_model)
 # print(vect_[:5])
 ################################################################
 
@@ -118,6 +132,9 @@ def vector_print(asm2vec_funcs, model):
         plt.title(funcs.name())
         plt.show()
 
+def write_big_vec(loaded_model):
+    pass
+
 
 # vectors = vector_append(asm2vec_funcs, loaded_model)
 # print(vectors.ndim)
@@ -134,7 +151,61 @@ def vector_print(asm2vec_funcs, model):
 # print(len(asm2vec_funcs))
 
 
-folder = os.path.join('vectors/Rust', "rust_vec.npy" )
-vect_ = np.load(folder)
-print(vect_.shape)
-print(vect_[0].size)
+# folder = os.path.join('vectors/Rust', "rust_vec.npy" )
+# vect_ = np.load(folder)
+# print(vect_.shape)
+# print(vect_[0].size)
+
+
+
+import os
+import numpy as np
+from multiprocessing import Pool
+import multiprocessing
+
+def process_file(file):
+    print("############# New file is here############################ \n")
+    vect_ = []
+    file1 = os.path.join('function_pickle/Rust/', file)
+    file1 = deserialize_from_pickle(file1)
+    for func in file1:
+        funcs = set()
+        if func.name().startswith("_") or func.name() in funcs:
+            continue
+        # print(func.name())
+        funcs.add(func.name())
+        
+        vect_.append(loaded_model.to_vec(func))
+    folder = os.path.join('vectors/Rust/', file)
+    vect_ = np.array(vect_)
+    np.save(folder, vect_)
+
+def write_numpy_vector1(loaded_model):
+    files = os.listdir('function_pickle/Rust/')
+    with Pool(os.cpu_count()) as p:
+        p.map(process_file, files)
+
+# write_numpy_vector1(loaded_model)
+
+
+def train_model():
+    # train_repo = Repo('train_repo')
+    total = []
+    files = os.listdir('function_pickle/Rust/')
+    for file in files:
+        file = os.path.join('function_pickle/Rust/', file)
+        file = deserialize_from_pickle(file)
+        total.extend(file)
+    
+    print(len(total))
+    breakpoint()
+    model = Asm2Vec(d = 200)
+    train_repo = model.make_function_repo(total)
+    model.train(train_repo)
+    return model
+
+# if __name__ == '__main__':
+pool = multiprocessing.Pool()
+model = pool.apply(train_model, ())
+with open('asm2vec_model2.pkl', 'wb') as f:
+    pickle.dump(model, f)
