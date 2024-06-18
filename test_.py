@@ -188,17 +188,11 @@ def write_numpy_vector1(loaded_model):
 # write_numpy_vector1(loaded_model)
 
 
+
 def train_model():
     # train_repo = Repo('train_repo')
-    total = []
-    files = os.listdir('function_pickle/Rust/')
-    for file in files:
-        file = os.path.join('function_pickle/Rust/', file)
-        file = deserialize_from_pickle(file)
-        total.extend(file)
+    total = np.load('renew_total.npy', allow_pickle=True)
     
-    print(len(total))
-    breakpoint()
     model = Asm2Vec(d = 200)
     train_repo = model.make_function_repo(total)
     model.train(train_repo)
@@ -209,3 +203,4 @@ pool = multiprocessing.Pool()
 model = pool.apply(train_model, ())
 with open('asm2vec_model2.pkl', 'wb') as f:
     pickle.dump(model, f)
+
