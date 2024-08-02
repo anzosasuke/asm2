@@ -1,6 +1,6 @@
 import numpy as np
 import sys
-sys.setrecursionlimit(10000)
+sys.setrecursionlimit(20000)
 from asm2vec.model import Asm2Vec
 from asm2vec.repo import *
 import pickle
@@ -12,22 +12,68 @@ import os
 import argparse
 import matplotlib.pyplot as plt
 from multiprocessing import Pool
+import dill
+def write_in_pick(folder, name, model):
+    with open(folder + '/' + name + '.pkl', 'wb') as f:
+        dill.dump(model, f)
 
-
-
-def write_function_pkl(asm2vec_functions):
+def write_function_pkl(asm2vec_functions, total_, funcs):
     for asm2vec_function in asm2vec_functions:
         name_ = asm2vec_function.name()
-        if len(name_) > 30:
-            name_ = name_[:30]
-            folder = os.path.join('functions/c/', name_)
-            with open(folder, 'wb') as f:
-               pickle.dump(asm2vec_function, f)
+        if asm2vec_function.name().startswith("_"):
+            continue
+        for fun in funcs:
+            if name_ == fun.name():
+                if fun.__len__() == asm2vec_function.__len__():
+                    continue
 
-        else:
-            folder = os.path.join('functions/c/', name_)
-            with open(folder, 'wb') as f:
-                pickle.dump(asm2vec_function, f)
+        funcs.add(asm2vec_function)
+        total_.append(asm2vec_function)
+
+
+
+
+# folder = os.path.join('function_pickle/opt/c/')
+# total_c = []
+# funcs = set()
+# for file in os.listdir(folder):
+#     with open(folder+file, "rb") as f:
+#         write_function_pkl(pickle.load(f), total_c, funcs)
+#
+#     if len(total_c) > 6000:
+#         total_c = total_c[:6000]
+#         break
+# # print("here")
+# print(len(total_c))
+#
+# folder1 = os.path.join('function_pickle/optimized/total/')
+# write_in_pick(folder1, "c", total_c)
+
+# folder = os.path.join('function_pickle/optimized/cpp/')
+# #
+#
+# total_cpp = []
+# funcs = set()
+#
+# count = 0
+# for file in os.listdir(folder):
+#     try:
+#         with open(folder+file, "rb") as f:
+#             write_function_pkl(dill.load(f), total_cpp, funcs)
+#             count = count+1
+#             # print(count)
+#     except EOFError:
+#         print(file)
+#         print("Error: The pickle file is invalid or empty.")
+#     if len(total_cpp) >6000:
+#         total_cpp = total_cpp[:6000]
+#         break
+
+# folder1 = os.path.join('function_pickle/optimized/total/')
+# print("here")
+# print(len(total_cpp))
+#
+# write_in_pick(folder1, "cpp", total_cpp)
 
 def deserialize_from_pickle(filename):
     with open(filename, 'rb') as f:
@@ -66,7 +112,6 @@ def fetch_functions():
 
 
 
-# loaded_model = deserialize_from_pickle('asm2vec_model1.pkl')
 
 
 
@@ -78,31 +123,94 @@ def fetch_functions():
 # asm2vec_funcs = deserialize_from_pickle('function_pickle/C/sgcc')
 # write_function_pkl(asm2vec_funcs)
 
-def write_numpy_vector(loaded_model):
+def write_numpy_vector(loaded_model, folder1, folder2):
     vect_ = []
-    
-    for file in os.listdir('function_pickle/Rust'):
-        
-        file = os.path.join('function_pickle/Rust', file)
-        print(file)
+
+    for i, file in enumerate(os.listdir(folder1)):
+        file = os.path.join(folder1, file)
+        # print(file)
         file = deserialize_from_pickle(file)
-        print("here")
+        # print("here")
+        funcs = set()
+
         for func in file:
+            if func.name().startswith("_") or func.name() in funcs:
+                continue
             vect_.append(loaded_model.to_vec(func))
+            funcs.add(func.name())
+        print(len(funcs))
+        if len(funcs) > 4000:
+            break
         # print(np.array(vect_).shape)
-        folder = os.path.join('vectors/Rust', file)
-        vect_ = np.array(vect_)
-        np.save(folder, vect_)
-    
-        
-# write_numpy_vector(loaded_model)
-# print(vect_[:5])
+    folder = folder2
+    vect_ = np.array(vect_)
+    np.save(folder, vect_)
+
+# folder1= 'function_pickle/c'
+# folder2 = 'vectors/c'
+# loaded_model = deserialize_from_pickle('models/first2k_rust10.pkl')
+# write_numpy_vector(loaded_model,folder1, folder2)
+# folder1= 'function_pickle/rust'
+# folder2 = 'vectors/rust'
+# loaded_model = deserialize_from_pickle('models/first2k_10.pkl')
+# write_numpy_vector(loaded_model, folder1, folder2)
+# # print(vect_[:5])
 ################################################################
 
 ###################### Check for Smiliarity ###################
+
 # pkl1, pkl2 = fetch_functions()
-# sim = compare_2_functions(pkl1, pkl2, loaded_model)
-# print(sim)
+def process_file(c_file, loaded_model):
+    """Helper function to compare a C function to the Rust function."""
+    c_func = deserialize_from_pickle(os.path.join('functions/Rust', c_file))
+    # rust_func = deserialize_from_pickle(os.path.join('functions/Rust', rust_file))
+    sim = compare_2_functions(c_func, c_func, loaded_model)
+
+    print(c_func.name(), sim)
+    return sim
+
+
+
+# c_files = sorted(os.listdir('functions/Rust'))[:100]  # Get first 100
+#
+# for c_file in c_files:
+#     process_file(str(c_file), loaded_model)
+# with Pool(processes=num_processes) as pool:
+#     results = pool.map(process_file, file_pairs)
+########################################################################
+def first2000(folder):
+    # breakpoint()
+    # folder = os.path.join('function_pickle/Rust/')
+    c_first5000 = []
+    for file in os.listdir(folder):
+        # print(file)
+        c_func_pick = deserialize_from_pickle(folder+file)
+
+        funcs = set()
+        for func in c_func_pick:
+            if len(c_first5000) < 2000:
+                if func.name().startswith("_") or func.name() in funcs:
+                    continue
+                funcs.add(func.name())
+                c_first5000.append(func)
+
+    with open(os.path.join(folder+'first2000'), 'wb') as f:
+        pickle.dump(c_first5000, f)
+    # with open(os.path.join(folder[:folder.rfind('/')], "first100"), "wb") as f:
+    #     pickle.dump(c_first5000, f)
+
+
+# first2000(folder='function_pickle/c/')
+# first = deserialize_from_pickle('function_pickle/c/alias')
+# print(first)
+
+
+
+
+
+
+# for file, sim in results:
+#     print(f"Similarity for {file}: {sim}")
 ##############################################################
 
 ############### New Experiment #############
@@ -189,18 +297,35 @@ def write_numpy_vector1(loaded_model):
 
 
 
-def train_model():
+def train_model(folder, rnd_walks):
     # train_repo = Repo('train_repo')
-    total = np.load('renew_total.npy', allow_pickle=True)
+    total = np.load(folder, allow_pickle=True)
+    total = total[:2000]
     
-    model = Asm2Vec(d = 200)
+    model = Asm2Vec(d = 200, rnd_walks = rnd_walks)
     train_repo = model.make_function_repo(total)
     model.train(train_repo)
     return model
+# #
+folder = [os.path.join('function_pickle/optimized/total/go.pkl'), os.path.join('function_pickle/optimized/total/rust.pkl')]
+model = train_model(folder[0],3)
+write_in_pick("models/optimized/", "first2k_go3", model=model )
+model = train_model(folder[1],3)
+write_in_pick("models/optimized", "first2k_rust3", model=model)
+model = train_model(folder[0],5)
+write_in_pick("models/optimized", "first2k_go5", model=model )
+model = train_model(folder[1],5)
+write_in_pick("models/optimized", "first2k_rust5", model=model)
+model = train_model(folder[0],10)
+write_in_pick("models/optimized", "first2k_go10", model=model )
+model = train_model(folder[1],10)
+write_in_pick("models/optimized", "first2k_rust10", model=model)
 
-# if __name__ == '__main__':
-pool = multiprocessing.Pool()
-model = pool.apply(train_model, ())
-with open('asm2vec_model2.pkl', 'wb') as f:
-    pickle.dump(model, f)
+# pool = multiprocessing.Pool()
+# model = pool.apply(train_model, ())
+# model = train_model()
 
+for i in range(3):
+    duration = 1  # seconds
+    freq = 440  # Hz
+    os.system('play -nq -t alsa synth {} sine {}'.format(duration, freq))
